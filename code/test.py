@@ -30,7 +30,8 @@ def test(model, dataloader, modelname, id2rel, input_theta=-1, output=False, is_
             indexes = d['indexes']
             overlaps = d['overlaps']
 
-            predictions = model(words=d['context_idxs'],
+            predictions, encoder_outputs, output_feature, \
+            entity_graph_feature, h_entity, t_entity = model(words=d['context_idxs'],
                                 src_lengths=d['context_word_length'],
                                 mask=d['context_word_mask'],
                                 entity_type=d['context_ner'],

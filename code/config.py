@@ -100,4 +100,8 @@ def get_opt():
     # binary classification threshold, automatically find optimal threshold when -1
     parser.add_argument('--input_theta', type=float, default=-1)
 
+    
+    parser.add_argument('--LPmode', choices=['HAKE', 'TransE', 'TransR', 'RotatE'], default = 'HAKE')
+
+    
     return parser.parse_args()
