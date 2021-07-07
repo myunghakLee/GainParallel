@@ -1,3 +1,24 @@
+from LPmodels import KGEModel, HAKE
+import torch.nn.functional as F
+
+
+
+
+# +
+def p_score(vector, subsampling_weight):
+    positive_score = F.logsigmoid(vector).squeeze(dim=1)
+    positive_sample_loss = - (subsampling_weight * positive_score).sum() / subsampling_weight.sum()
+    return positive_sample_loss
+
+def n_score(vector, subsampling_weight, adversarial_temperature=1.0):
+    negative_score = (F.softmax(vector * adversarial_temperature, dim=1).detach()
+                          * F.logsigmoid(-vector)).sum(dim=1)
+    negative_sample_loss = - (subsampling_weight * negative_score).sum() / subsampling_weight.sum()
+    return negative_sample_loss
+
+
+# -
+
 import time
 
 import matplotlib
@@ -5,6 +26,8 @@ import matplotlib.pyplot as plt
 import torch
 from torch import nn
 from torch import optim
+import torch.nn.functional as F
+
 
 from config import *
 from data import DGLREDataset, DGLREDataloader, BERTDGLREDataset
@@ -18,7 +41,9 @@ matplotlib.use('Agg')
 # for ablation
 # from models.GAIN_nomention import GAIN_GloVe, GAIN_BERT
 
+# +
 def train(opt):
+    ##################################################data loader##################################################
     if opt.use_model == 'bert':
         # datasets
         train_set = BERTDGLREDataset(opt.train_set, opt.train_set_save, word2id, ner2id, rel2id, dataset_type='train',
@@ -48,8 +73,18 @@ def train(opt):
         model = GAIN_GloVe(opt)
     else:
         assert 1 == 2, 'please choose a model from [bert, bilstm].'
+    ##################################################################################################################
+    
+    relation_emb_size = opt.bert_hid_size + opt.entity_id_size + opt.entity_type_size
+    assert relation_emb_size % 2 == 0, "relation embedding dimension is wrong"
+    relation_emb_size = int(relation_emb_size * 1.5)
+    assert relation_emb_size % 3 == 0, "relation embedding dimension is wrong"
+    relation_embedding = nn.Parameter(torch.randn(opt.relation_nums, relation_emb_size, requires_grad=True , device= "cuda"))
 
-    print(model.parameters)
+#     assert relation_emb_size % 3 == 0, "relation embedding dimension is wrong"
+    print(opt.relation_nums, relation_embedding//3)
+    LPmodel = KGEModel(num_relation = opt.relation_nums, hidden_dim = relation_emb_size//3)
+
     print_params(model)
 
     start_epoch = 1
@@ -68,13 +103,14 @@ def train(opt):
         logging('training from scratch with lr {}'.format(lr))
 
     model = get_cuda(model)
-
+    LPmodel = get_cuda(LPmodel)
     if opt.use_model == 'bert':
         bert_param_ids = list(map(id, model.bert.parameters()))
         base_params = filter(lambda p: p.requires_grad and id(p) not in bert_param_ids, model.parameters())
 
         optimizer = optim.AdamW([
             {'params': model.bert.parameters(), 'lr': lr * 0.01},
+            {'params': relation_embedding, 'lr': lr * 0.01},
             {'params': base_params, 'weight_decay': opt.weight_decay}
         ], lr=lr)
     else:
@@ -82,7 +118,9 @@ def train(opt):
                                 weight_decay=opt.weight_decay)
 
     BCE = nn.BCEWithLogitsLoss(reduction='none')
-
+    
+    
+    
     if opt.coslr:
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=(opt.epoch // 4) + 1)
 
@@ -121,33 +159,94 @@ def train(opt):
             relation_multi_label = d['relation_multi_label']
             relation_mask = d['relation_mask']
             relation_label = d['relation_label']
+            
+            '''
+                predictions: last output (1,95,97)
+                encoder_outputs: BERT output
+                output_feature: GCN output
+                entity_graph_feature: GCN output2
+                h_entity: head entity  (1,35,2424)
+                t_entity: tail entity
+            '''
 
-            predictions = model(words=d['context_idxs'],
-                                src_lengths=d['context_word_length'],
-                                mask=d['context_word_mask'],
-                                entity_type=d['context_ner'],
-                                entity_id=d['context_pos'],
-                                mention_id=d['context_mention'],
-                                distance=None,
-                                entity2mention_table=d['entity2mention_table'],
-                                graphs=d['graphs'],
-                                h_t_pairs=d['h_t_pairs'],
-                                relation_mask=relation_mask,
-                                path_table=d['path_table'],
-                                entity_graphs=d['entity_graphs'],
-                                ht_pair_distance=d['ht_pair_distance']
-                                )
+            predictions, encoder_outputs, output_feature, \
+            entity_graph_feature, h_entity, t_entity = model(words=d['context_idxs'],
+                                                    src_lengths=d['context_word_length'],
+                                                    mask=d['context_word_mask'],
+                                                    entity_type=d['context_ner'],
+                                                    entity_id=d['context_pos'],
+                                                    mention_id=d['context_mention'],
+                                                    distance=None,
+                                                    entity2mention_table=d['entity2mention_table'],
+                                                    graphs=d['graphs'],
+                                                    h_t_pairs=d['h_t_pairs'],
+                                                    relation_mask=relation_mask,
+                                                    path_table=d['path_table'],
+                                                    entity_graphs=d['entity_graphs'],
+                                                    ht_pair_distance=d['ht_pair_distance'])
+            
+            
             loss = torch.sum(BCE(predictions, relation_multi_label) * relation_mask.unsqueeze(2)) / (
                     opt.relation_nums * torch.sum(relation_mask))
+            
+            start_idx = 0
+            positive_sample_loss = 0.0
+            negative_sample_loss = 0.0
+            for i, batch in enumerate(relation_multi_label):
+                ent_size = len(d['entity_graphs'][i].nodes())
+                rel = torch.nonzero(batch[:ent_size] == 1)
+                
+                p_idx = rel[:,0][torch.where(rel[:,1]>0)] + start_idx
+                n_idx = rel[:,0][torch.where(rel[:,1]==0)] + start_idx
 
+                head_p = entity_graph_feature[p_idx]
+                tail_p = entity_graph_feature[p_idx]
+                if len(head_p > 0):
+                    rel_p = rel[:,1][p_idx]
+                    rel_p = relation_embedding[rel_p]
+
+                    output = LPmodel.func(head_p.reshape(len(head_p), 1, -1),
+                                          rel_p.reshape(len(head_p), 1, -1),
+                                          tail_p.reshape(len(head_p), 1, -1))
+                    subsampling_weight = torch.tensor([1/len(head_p) for i in range(len(head_p))]).cuda()
+                    positive_score = p_score(output, subsampling_weight)
+                    positive_sample_loss += -(subsampling_weight * positive_score).sum() / subsampling_weight.sum()
+                
+                
+                
+                head_n = entity_graph_feature[n_idx]
+                tail_n = entity_graph_feature[n_idx]
+                if len(head_n > 0):
+                    rel_n = (torch.randint(opt.relation_nums-1, (len(head_n),))+1).cuda()
+                    rel_n = relation_embedding[rel_n]
+                    output = LPmodel.func(head_n.reshape(len(head_n), 1, -1),
+                                          rel_n.reshape(len(head_n), 1, -1),
+                                          tail_n.reshape(len(head_n), 1, -1))
+                    subsampling_weight = torch.tensor([1/len(head_n) for i in range(len(head_n))]).cuda()
+                    negative_score = n_score(output, subsampling_weight)
+                    negative_sample_loss += -(subsampling_weight * negative_score).sum() / subsampling_weight.sum()
+                
+            positive_sample_loss = positive_sample_loss / len(relation_multi_label)
+            negative_sample_loss = negative_sample_loss / len(relation_multi_label)
+#             print("positive_sample_loss : ",positive_sample_loss)
+#             print("negative_sample_loss : ",negative_sample_loss)
+#             print("="*120)
+            
+            pn_loss = (positive_sample_loss + negative_sample_loss)*0.001
+#             print("pn_loss: ", pn_loss)
+#             print("loss: ", loss)
+            
+            loss = loss + pn_loss
             optimizer.zero_grad()
             loss.backward()
 
+            
             if opt.clip != -1:
                 nn.utils.clip_grad_value_(model.parameters(), opt.clip)
             optimizer.step()
             if opt.coslr:
                 scheduler.step(epoch)
+            
 
             output = torch.argmax(predictions, dim=-1)
             output = output.data.cpu().numpy()
@@ -220,7 +319,7 @@ def train(opt):
     print("Best epoch = %d | Best Ign F1 = %f" % (best_epoch, best_ign_f1))
     print("Storing best result...")
     print("Finish storing")
-
+# -
 
 if __name__ == '__main__':
     print('processId:', os.getpid())
