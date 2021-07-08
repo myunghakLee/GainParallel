@@ -77,13 +77,16 @@ def train(opt):
     
     relation_emb_size = opt.bert_hid_size + opt.entity_id_size + opt.entity_type_size
     assert relation_emb_size % 2 == 0, "relation embedding dimension is wrong"
-#     relation_emb_size = int(relation_emb_size * 1.5)
-#     assert relation_emb_size % 3 == 0, "relation embedding dimension is wrong"
-    relation_embedding = nn.Parameter(torch.randn(opt.relation_nums, relation_emb_size, requires_grad=True , device= "cuda"))
 
+    if opt.LPmode == "HAKE":
+        relation_emb_size = int(relation_emb_size * 1.5)
+        assert relation_emb_size % 3 == 0, "relation embedding dimension is wrong"
+    relation_embedding = nn.Parameter(torch.randn(opt.relation_nums, relation_emb_size, requires_grad=True , device= "cuda"))
+    print("relation_embedding : ", relation_embedding.shape)
+    # exit(True)
 #     assert relation_emb_size % 3 == 0, "relation embedding dimension is wrong"
     print(opt.relation_nums, relation_embedding//3)
-    LPmodel = KGEModel(num_relation = opt.relation_nums, hidden_dim = relation_emb_size//3)
+    LPmodel = KGEModel(num_relation = opt.relation_nums, hidden_dim = relation_emb_size//3, mode = opt.LPmode)
 
     print_params(model)
 
