@@ -1,0 +1,9 @@
+data/*
+PLM/*
+test_results_jsons_old/*
+code/checkpoint/*
+code/OldResults/*
+code/*.pt
+SemEval2DocRED/*
+code/logs/*
+
