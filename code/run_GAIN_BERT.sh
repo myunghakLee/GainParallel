@@ -1,10 +1,12 @@
 #! /bin/bash
 export CUDA_VISIBLE_DEVICES=$1
+MODE=$2
+RE_lr_scale=$3
 
 # -------------------GAIN_BERT_base Training Shell Script--------------------
 
 if true; then
-  model_name=GAIN_BERT_base
+  model_name=GAIN_BERT_base${MODE}_${RE_lr_scale}
   lr=0.001
   batch_size=5
   test_batch_size=16
@@ -40,6 +42,8 @@ if true; then
     --dropout 0.6 \
     --activation relu \
     --coslr \
+    --LPmode ${MODE} \
+    --RE_lr_scale ${RE_lr_scale} \
     >logs/train_${model_name}.log 2>&1 &
 fi
 

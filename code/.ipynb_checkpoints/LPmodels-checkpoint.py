@@ -14,7 +14,7 @@ from torch.utils.data import DataLoader
 # -
 
 class KGEModel(nn.Module):
-    def __init__(self, num_relation, hidden_dim, gamma=12.0, modulus_weight=1.0, phase_weight=0.5):
+    def __init__(self, num_relation, hidden_dim, mode = "HAKE", gamma=12.0, modulus_weight=1.0, phase_weight=0.5):
         super(KGEModel, self).__init__()
 #         self.num_entity = num_entity
         self.num_relation = num_relation
@@ -35,31 +35,34 @@ class KGEModel(nn.Module):
         self.modulus_weight = nn.Parameter(torch.Tensor([[modulus_weight]]))
 
         self.pi = 3.14159262358979323846
-
+        self.LPmode = mode
 
     def func(self, head, rel, tail):
-        phase_head, mod_head = torch.chunk(head, 2, dim=2)
-        phase_relation, mod_relation, bias_relation = torch.chunk(rel, 3, dim=2)
-        phase_tail, mod_tail = torch.chunk(tail, 2, dim=2)
+        if self.LPmode == "HAKE":        
+            phase_head, mod_head = torch.chunk(head, 2, dim=2)
+            phase_relation, mod_relation, bias_relation = torch.chunk(rel, 3, dim=2)
+            phase_tail, mod_tail = torch.chunk(tail, 2, dim=2)
 
-        phase_head = phase_head / (self.embedding_range.item() / self.pi)
-        phase_relation = phase_relation / (self.embedding_range.item() / self.pi)
-        phase_tail = phase_tail / (self.embedding_range.item() / self.pi)
+            phase_head = phase_head / (self.embedding_range.item() / self.pi)
+            phase_relation = phase_relation / (self.embedding_range.item() / self.pi)
+            phase_tail = phase_tail / (self.embedding_range.item() / self.pi)
 
-        phase_score = (phase_head + phase_relation) - phase_tail
+            phase_score = (phase_head + phase_relation) - phase_tail
 
-        mod_relation = torch.abs(mod_relation)
-        bias_relation = torch.clamp(bias_relation, max=1)
-        indicator = (bias_relation < -mod_relation)
-        bias_relation[indicator] = -mod_relation[indicator]
+            mod_relation = torch.abs(mod_relation)
+            bias_relation = torch.clamp(bias_relation, max=1)
+            indicator = (bias_relation < -mod_relation)
+            bias_relation[indicator] = -mod_relation[indicator]
 
-        r_score = mod_head * (mod_relation + bias_relation) - mod_tail * (1 - bias_relation)
+            r_score = mod_head * (mod_relation + bias_relation) - mod_tail * (1 - bias_relation)
 
-        phase_score = torch.sum(torch.abs(torch.sin(phase_score / 2)), dim=2) * self.phase_weight
-        r_score = torch.norm(r_score, dim=2) * self.modulus_weight
+            phase_score = torch.sum(torch.abs(torch.sin(phase_score / 2)), dim=2) * self.phase_weight
+            r_score = torch.norm(r_score, dim=2) * self.modulus_weight
 
-        return self.gamma.item() - (phase_score + r_score)
+            return self.gamma.item() - (phase_score + r_score)
+            
         
+        return self.gamma.item() - torch.norm(head * rel - tail, p=1, dim=2)
         
         
         
@@ -84,16 +87,16 @@ class KGEModel(nn.Module):
         # negative scores
         negative_score = model((positive_sample, negative_sample), batch_type=batch_type)
 
-        negative_score = (F.softmax(negative_score * args.adversarial_temperature, dim=1).detach()
+        positive_sample_loss = (F.softmax(negative_score * args.adversarial_temperature, dim=1).detach()
                           * F.logsigmoid(-negative_score)).sum(dim=1)
 
         # positive scores
         positive_score = model(positive_sample)
 
-        positive_score = F.logsigmoid(positive_score).squeeze(dim=1)
+        negative_sample_loss = F.logsigmoid(positive_score).squeeze(dim=1)
 
-        positive_sample_loss = - (subsampling_weight * positive_score).sum() / subsampling_weight.sum()
-        negative_sample_loss = - (subsampling_weight * negative_score).sum() / subsampling_weight.sum()
+#         positive_sample_loss = positive_score- (subsampling_weight * positive_score).sum() / subsampling_weight.sum()
+#         negative_sample_loss = negative_score- (subsampling_weight * negative_score).sum() / subsampling_weight.sum()
 
         loss = (positive_sample_loss + negative_sample_loss) / 2
 

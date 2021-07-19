@@ -113,7 +113,7 @@ def train(opt):
 
         optimizer = optim.AdamW([
             {'params': model.bert.parameters(), 'lr': lr * 0.01},
-            {'params': relation_embedding, 'lr': lr},
+            {'params': relation_embedding, 'lr': lr * opt.RE_lr_scale},
             {'params': base_params, 'weight_decay': opt.weight_decay}
         ], lr=lr)
     else:
@@ -337,7 +337,7 @@ def train(opt):
 
                 plt.plot(pr_x, pr_y, lw=2, label=str(epoch))
                 plt.legend(loc="upper right")
-                plt.savefig(os.path.join(fig_result_dir, model_name))
+                plt.savefig(os.path.join(fig_result_dir, model_name) + ".jpg")
 
         if epoch % opt.save_model_freq == 0:
             path = os.path.join(checkpoint_dir, model_name + '_{}.pt'.format(epoch))

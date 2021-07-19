@@ -5,12 +5,12 @@ import torch.nn.functional as F
 
 
 # +
-def p_score(vector, subsampling_weight):
+def p_score(vector, subsampling_weight, mode="HAKE"):
     positive_score = F.logsigmoid(vector).squeeze(dim=1)
     positive_sample_loss = - (subsampling_weight * positive_score).sum() / subsampling_weight.sum()
     return positive_sample_loss
 
-def n_score(vector, subsampling_weight, adversarial_temperature=1.0):
+def n_score(vector, subsampling_weight, mode="HAKE", adversarial_temperature=1.0):
     negative_score = (F.softmax(vector * adversarial_temperature, dim=1).detach()
                           * F.logsigmoid(-vector)).sum(dim=1)
     negative_sample_loss = - (subsampling_weight * negative_score).sum() / subsampling_weight.sum()
@@ -77,13 +77,16 @@ def train(opt):
     
     relation_emb_size = opt.bert_hid_size + opt.entity_id_size + opt.entity_type_size
     assert relation_emb_size % 2 == 0, "relation embedding dimension is wrong"
-    relation_emb_size = int(relation_emb_size * 1.5)
-    assert relation_emb_size % 3 == 0, "relation embedding dimension is wrong"
-    relation_embedding = nn.Parameter(torch.randn(opt.relation_nums, relation_emb_size, requires_grad=True , device= "cuda"))
 
+    if opt.LPmode == "HAKE":
+        relation_emb_size = int(relation_emb_size * 1.5)
+        assert relation_emb_size % 3 == 0, "relation embedding dimension is wrong"
+    relation_embedding = nn.Parameter(torch.randn(opt.relation_nums, relation_emb_size, requires_grad=True , device= "cuda"))
+    print("relation_embedding : ", relation_embedding.shape)
+    # exit(True)
 #     assert relation_emb_size % 3 == 0, "relation embedding dimension is wrong"
     print(opt.relation_nums, relation_embedding//3)
-    LPmodel = KGEModel(num_relation = opt.relation_nums, hidden_dim = relation_emb_size//3)
+    LPmodel = KGEModel(num_relation = opt.relation_nums, hidden_dim = relation_emb_size//3, mode = opt.LPmode)
 
     print_params(model)
 
@@ -110,7 +113,7 @@ def train(opt):
 
         optimizer = optim.AdamW([
             {'params': model.bert.parameters(), 'lr': lr * 0.01},
-            {'params': relation_embedding, 'lr': lr * 0.01},
+            {'params': relation_embedding, 'lr': lr * opt.RE_lr_scale},
             {'params': base_params, 'weight_decay': opt.weight_decay}
         ], lr=lr)
     else:
@@ -139,7 +142,7 @@ def train(opt):
 
     global_step = 0
     total_loss = 0
-
+    pn_total_loss = 0
     plt.xlabel('Recall')
     plt.ylabel('Precision')
     plt.ylim(0.0, 1.0)
@@ -192,39 +195,66 @@ def train(opt):
             start_idx = 0
             positive_sample_loss = 0.0
             negative_sample_loss = 0.0
+#             print(d['entity_graphs'])
             for i, batch in enumerate(relation_multi_label):
-                ent_size = len(d['entity_graphs'][i].nodes())
-                rel = torch.nonzero(batch[:ent_size] == 1)
+#                 print("relation_multi_label dddddddddddddddddddd: ",len(relation_multi_label))
+                h_t_pairs = d['h_t_pairs'][i]
                 
-                p_idx = rel[:,0][torch.where(rel[:,1]>0)] + start_idx
-                n_idx = rel[:,0][torch.where(rel[:,1]==0)] + start_idx
+                ent_size = len(d['entity_graphs'][i].nodes())
+            
+                rel = torch.nonzero(batch[:ent_size] == 1)
+#                 print("batch : ", batch.shape)
+#                 print("h_t_pairs : ", d['h_t_pairs'][i])
+                
+#                 print(rel)
+#                 print(rel.shape)
+                p_idx = rel[:,0][torch.where(rel[:,1]>0)]
+                if len(p_idx) == 0:
+                    continue
+#                 n_idx = rel[:,0][torch.where(rel[:,1]==0)]
+                head_p = entity_graph_feature[h_t_pairs[p_idx][:,0] + start_idx-1]
+                tail_p = entity_graph_feature[h_t_pairs[p_idx][:,1] + start_idx-1]
+                head_p = head_p.reshape(len(head_p), 1, -1)
+                tail_p = tail_p.reshape(len(tail_p), 1, -1)
+                
+                
+                ent_n = torch.cat((entity_graph_feature[:start_idx], entity_graph_feature[start_idx+ent_size:]))
+                ent_n = ent_n.repeat((len(head_p),1,1))
 
-                head_p = entity_graph_feature[p_idx]
-                tail_p = entity_graph_feature[p_idx]
+                
                 if len(head_p > 0):
                     rel_p = rel[:,1][p_idx]
                     rel_p = relation_embedding[rel_p]
-
-                    output = LPmodel.func(head_p.reshape(len(head_p), 1, -1),
-                                          rel_p.reshape(len(head_p), 1, -1),
-                                          tail_p.reshape(len(head_p), 1, -1))
+                    rel_p = rel_p.reshape(len(rel_p), 1, -1)
+#                     print("HeadP : ", head_p.shape)
+#                     print("tail_p : ", tail_p.shape)
+#                     print("rel_p : ", rel_p.shape)
+#                     print("ent_n : ", ent_n.shape)
+#                     print("="*100)
+                    output = LPmodel.func(head_p,rel_p,tail_p)
                     subsampling_weight = torch.tensor([1/len(head_p) for i in range(len(head_p))]).cuda()
-                    positive_score = p_score(output, subsampling_weight)
-                    positive_sample_loss += -(subsampling_weight * positive_score).sum() / subsampling_weight.sum()
-                
-                
-                
-                head_n = entity_graph_feature[n_idx]
-                tail_n = entity_graph_feature[n_idx]
-                if len(head_n > 0):
-                    rel_n = (torch.randint(opt.relation_nums-1, (len(head_n),))+1).cuda()
-                    rel_n = relation_embedding[rel_n]
-                    output = LPmodel.func(head_n.reshape(len(head_n), 1, -1),
-                                          rel_n.reshape(len(head_n), 1, -1),
-                                          tail_n.reshape(len(head_n), 1, -1))
-                    subsampling_weight = torch.tensor([1/len(head_n) for i in range(len(head_n))]).cuda()
-                    negative_score = n_score(output, subsampling_weight)
-                    negative_sample_loss += -(subsampling_weight * negative_score).sum() / subsampling_weight.sum()
+                    positive_sample_loss = p_score(output, subsampling_weight)
+
+#                 if len(head_n > 0):
+#                     rel_n = (torch.randint(opt.relation_nums-1, (len(head_n),))+1).cuda()
+#                     rel_n = relation_embedding[rel_n]
+                    
+                    if torch.randint(2,(1,)) == 1:
+                        output = LPmodel.func(head_p.reshape(len(head_p), 1, -1),
+                                              rel_p.reshape(len(head_p), 1, -1),
+                                              ent_n)
+                    else:
+                        output = LPmodel.func(ent_n,
+                                              rel_p.reshape(len(head_p), 1, -1),
+                                              tail_p.reshape(len(head_p), 1, -1))
+                        
+#                     subsampling_weight = torch.tensor([1/len(head_n) for i in range(len(head_n))]).cuda()
+                    negative_sample_loss = n_score(output, subsampling_weight)
+#                     negative_sample_loss += -(subsampling_weight * negative_score).sum() / subsampling_weight.sum()
+                start_idx += ent_size                   
+                                   
+                                   
+                                
                 
             positive_sample_loss = positive_sample_loss / len(relation_multi_label)
             negative_sample_loss = negative_sample_loss / len(relation_multi_label)
@@ -232,7 +262,7 @@ def train(opt):
 #             print("negative_sample_loss : ",negative_sample_loss)
 #             print("="*120)
             
-            pn_loss = (positive_sample_loss + negative_sample_loss)*0.001
+            pn_loss = (positive_sample_loss + negative_sample_loss)*0.5
 #             print("pn_loss: ", pn_loss)
 #             print("loss: ", loss)
             
@@ -268,16 +298,18 @@ def train(opt):
 
             global_step += 1
             total_loss += loss.item()
-
+            pn_total_loss += pn_loss
             log_step = opt.log_step
             if global_step % log_step == 0:
                 cur_loss = total_loss / log_step
+                pn_cur_loss = pn_total_loss/log_step
                 elapsed = time.time() - start_time
                 logging(
-                    '| epoch {:2d} | step {:4d} |  ms/b {:5.2f} | train loss {:5.3f} | NA acc: {:4.2f} | not NA acc: {:4.2f}  | tot acc: {:4.2f} '.format(
-                        epoch, global_step, elapsed * 1000 / log_step, cur_loss * 1000, acc_NA.get(), acc_not_NA.get(),
+                    '| epoch {:2d} | step {:4d} |  ms/b {:5.2f} | pn loss {:5.3f} |train loss {:5.3f} | NA acc: {:4.2f} | not NA acc: {:4.2f}  | tot acc: {:4.2f} '.format(
+                        epoch, global_step, elapsed * 1000 / log_step, pn_cur_loss * 1000,cur_loss * 1000, acc_NA.get(), acc_not_NA.get(),
                         acc_total.get()))
                 total_loss = 0
+                pn_total_loss = 0
                 start_time = time.time()
 
         if epoch % opt.test_epoch == 0:
@@ -305,7 +337,7 @@ def train(opt):
 
                 plt.plot(pr_x, pr_y, lw=2, label=str(epoch))
                 plt.legend(loc="upper right")
-                plt.savefig(os.path.join(fig_result_dir, model_name))
+                plt.savefig(os.path.join(fig_result_dir, model_name) + ".jpg")
 
         if epoch % opt.save_model_freq == 0:
             path = os.path.join(checkpoint_dir, model_name + '_{}.pt'.format(epoch))

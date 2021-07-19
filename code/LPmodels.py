@@ -61,6 +61,7 @@ class KGEModel(nn.Module):
 
             return self.gamma.item() - (phase_score + r_score)
             
+        
         return self.gamma.item() - torch.norm(head * rel - tail, p=1, dim=2)
         
         

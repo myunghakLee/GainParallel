@@ -1,0 +1,36 @@
+processId: 40495
+prarent processId: 40494
+usage: train.py [-h] [--train_set TRAIN_SET] [--dev_set DEV_SET] [--test_set TEST_SET] [--train_set_save TRAIN_SET_SAVE]
+                [--dev_set_save DEV_SET_SAVE] [--test_set_save TEST_SET_SAVE] [--checkpoint_dir CHECKPOINT_DIR]
+                [--fig_result_dir FIG_RESULT_DIR] [--model_name MODEL_NAME] [--pretrain_model PRETRAIN_MODEL]
+                [--vocabulary_size VOCABULARY_SIZE] [--relation_nums RELATION_NUMS] [--entity_type_num ENTITY_TYPE_NUM]
+                [--max_entity_num MAX_ENTITY_NUM] [--word_pad WORD_PAD] [--entity_type_pad ENTITY_TYPE_PAD]
+                [--entity_id_pad ENTITY_ID_PAD] [--word_emb_size WORD_EMB_SIZE] [--pre_train_word]
+                [--data_word_vec DATA_WORD_VEC] [--finetune_word] [--use_entity_type]
+                [--entity_type_size ENTITY_TYPE_SIZE] [--use_entity_id] [--entity_id_size ENTITY_ID_SIZE]
+                [--nlayers NLAYERS] [--lstm_hidden_size LSTM_HIDDEN_SIZE] [--lstm_dropout LSTM_DROPOUT] [--lr LR]
+                [--batch_size BATCH_SIZE] [--test_batch_size TEST_BATCH_SIZE] [--epoch EPOCH] [--test_epoch TEST_EPOCH]
+                [--weight_decay WEIGHT_DECAY] [--negativa_alpha NEGATIVA_ALPHA] [--log_step LOG_STEP]
+                [--save_model_freq SAVE_MODEL_FREQ] [--mention_drop] [--gcn_layers GCN_LAYERS] [--gcn_dim GCN_DIM]
+                [--dropout DROPOUT] [--activation ACTIVATION] [--bert_hid_size BERT_HID_SIZE] [--bert_path BERT_PATH]
+                [--bert_fix] [--coslr] [--clip CLIP] [--k_fold K_FOLD] [--use_model {bilstm,bert}]
+                [--input_theta INPUT_THETA] [--LPmode {HAKE,TransE,TransR,RotatE}]
+train.py: error: argument --LPmode: invalid choice: '{MODE}' (choose from 'HAKE', 'TransE', 'TransR', 'RotatE')
+processId: 17858
+prarent processId: 17857
+usage: train.py [-h] [--train_set TRAIN_SET] [--dev_set DEV_SET] [--test_set TEST_SET] [--train_set_save TRAIN_SET_SAVE]
+                [--dev_set_save DEV_SET_SAVE] [--test_set_save TEST_SET_SAVE] [--checkpoint_dir CHECKPOINT_DIR]
+                [--fig_result_dir FIG_RESULT_DIR] [--model_name MODEL_NAME] [--pretrain_model PRETRAIN_MODEL]
+                [--vocabulary_size VOCABULARY_SIZE] [--relation_nums RELATION_NUMS] [--entity_type_num ENTITY_TYPE_NUM]
+                [--max_entity_num MAX_ENTITY_NUM] [--word_pad WORD_PAD] [--entity_type_pad ENTITY_TYPE_PAD]
+                [--entity_id_pad ENTITY_ID_PAD] [--word_emb_size WORD_EMB_SIZE] [--pre_train_word]
+                [--data_word_vec DATA_WORD_VEC] [--finetune_word] [--use_entity_type]
+                [--entity_type_size ENTITY_TYPE_SIZE] [--use_entity_id] [--entity_id_size ENTITY_ID_SIZE]
+                [--nlayers NLAYERS] [--lstm_hidden_size LSTM_HIDDEN_SIZE] [--lstm_dropout LSTM_DROPOUT] [--lr LR]
+                [--batch_size BATCH_SIZE] [--test_batch_size TEST_BATCH_SIZE] [--epoch EPOCH] [--test_epoch TEST_EPOCH]
+                [--weight_decay WEIGHT_DECAY] [--negativa_alpha NEGATIVA_ALPHA] [--log_step LOG_STEP]
+                [--save_model_freq SAVE_MODEL_FREQ] [--mention_drop] [--gcn_layers GCN_LAYERS] [--gcn_dim GCN_DIM]
+                [--dropout DROPOUT] [--activation ACTIVATION] [--bert_hid_size BERT_HID_SIZE] [--bert_path BERT_PATH]
+                [--bert_fix] [--coslr] [--clip CLIP] [--k_fold K_FOLD] [--use_model {bilstm,bert}]
+                [--input_theta INPUT_THETA] [--LPmode {HAKE,TransE,TransR,RotatE}]
+train.py: error: argument --LPmode: invalid choice: 'ModE' (choose from 'HAKE', 'TransE', 'TransR', 'RotatE')

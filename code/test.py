@@ -75,7 +75,6 @@ def test(model, dataloader, modelname, id2rel, input_theta=-1, output=False, is_
                             if (ours and (h_idx, t_idx) in overlap) or not ours:
                                 test_result.append((rel_ins in label, float(predict_re[i, j, r]), intrain,
                                                     title, id2rel[r], index, h_idx, t_idx, r))
-
                         j += 1
 
     test_result.sort(key=lambda x: x[1], reverse=True)

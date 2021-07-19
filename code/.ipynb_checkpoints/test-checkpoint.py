@@ -30,7 +30,8 @@ def test(model, dataloader, modelname, id2rel, input_theta=-1, output=False, is_
             indexes = d['indexes']
             overlaps = d['overlaps']
 
-            predictions, _,_,_,_,_ = model(words=d['context_idxs'],
+            predictions, encoder_outputs, output_feature, \
+            entity_graph_feature, h_entity, t_entity = model(words=d['context_idxs'],
                                 src_lengths=d['context_word_length'],
                                 mask=d['context_word_mask'],
                                 entity_type=d['context_ner'],
@@ -74,7 +75,6 @@ def test(model, dataloader, modelname, id2rel, input_theta=-1, output=False, is_
                             if (ours and (h_idx, t_idx) in overlap) or not ours:
                                 test_result.append((rel_ins in label, float(predict_re[i, j, r]), intrain,
                                                     title, id2rel[r], index, h_idx, t_idx, r))
-
                         j += 1
 
     test_result.sort(key=lambda x: x[1], reverse=True)
