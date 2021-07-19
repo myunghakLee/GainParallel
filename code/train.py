@@ -110,7 +110,7 @@ def train(opt):
 
         optimizer = optim.AdamW([
             {'params': model.bert.parameters(), 'lr': lr * 0.01},
-            {'params': relation_embedding, 'lr': lr * 0.01},
+            {'params': relation_embedding, 'lr': lr},
             {'params': base_params, 'weight_decay': opt.weight_decay}
         ], lr=lr)
     else:
@@ -139,7 +139,7 @@ def train(opt):
 
     global_step = 0
     total_loss = 0
-
+    pn_total_loss = 0
     plt.xlabel('Recall')
     plt.ylabel('Precision')
     plt.ylim(0.0, 1.0)
@@ -259,7 +259,7 @@ def train(opt):
 #             print("negative_sample_loss : ",negative_sample_loss)
 #             print("="*120)
             
-            pn_loss = (positive_sample_loss + negative_sample_loss)*0.1
+            pn_loss = (positive_sample_loss + negative_sample_loss)*0.5
 #             print("pn_loss: ", pn_loss)
 #             print("loss: ", loss)
             
@@ -295,16 +295,18 @@ def train(opt):
 
             global_step += 1
             total_loss += loss.item()
-
+            pn_total_loss += pn_loss
             log_step = opt.log_step
             if global_step % log_step == 0:
                 cur_loss = total_loss / log_step
+                pn_cur_loss = pn_total_loss/log_step
                 elapsed = time.time() - start_time
                 logging(
-                    '| epoch {:2d} | step {:4d} |  ms/b {:5.2f} | train loss {:5.3f} | NA acc: {:4.2f} | not NA acc: {:4.2f}  | tot acc: {:4.2f} '.format(
-                        epoch, global_step, elapsed * 1000 / log_step, cur_loss * 1000, acc_NA.get(), acc_not_NA.get(),
+                    '| epoch {:2d} | step {:4d} |  ms/b {:5.2f} | pn loss {:5.3f} |train loss {:5.3f} | NA acc: {:4.2f} | not NA acc: {:4.2f}  | tot acc: {:4.2f} '.format(
+                        epoch, global_step, elapsed * 1000 / log_step, pn_cur_loss * 1000,cur_loss * 1000, acc_NA.get(), acc_not_NA.get(),
                         acc_total.get()))
                 total_loss = 0
+                pn_total_loss = 0
                 start_time = time.time()
 
         if epoch % opt.test_epoch == 0:
