@@ -197,6 +197,7 @@ def train(opt):
             if opt.LPmode == "use_path_info":
                 for jj, (h, r, t) in enumerate(zip(h_entity, path_info, t_entity)):
                     
+<<<<<<< HEAD
                     length = int(torch.sum(relation_mask[jj]))
 #                     ht_set = set([ss for ss in d['h_t_pairs'][jj]])
                     
@@ -318,6 +319,36 @@ def train(opt):
     #             print("="*120)
 
             pn_loss = (positive_sample_loss + negative_sample_loss)*0.5
+=======
+                    if torch.randint(2,(1,)) == 1:
+                        output = LPmodel.func(head_p.reshape(len(head_p), 1, -1),
+                                              rel_p.reshape(len(head_p), 1, -1),
+                                              ent_n)
+                    else:
+                        output = LPmodel.func(ent_n,
+                                              rel_p.reshape(len(head_p), 1, -1),
+                                              tail_p.reshape(len(head_p), 1, -1))
+                        
+#                     subsampling_weight = torch.tensor([1/len(head_n) for i in range(len(head_n))]).cuda()
+                    negative_sample_loss = n_score(output, subsampling_weight)
+#                     negative_sample_loss += -(subsampling_weight * negative_score).sum() / subsampling_weight.sum()
+                start_idx += ent_size                   
+                                   
+                                   
+                                
+                
+            positive_sample_loss = positive_sample_loss / len(relation_multi_label)
+            negative_sample_loss = negative_sample_loss / len(relation_multi_label)
+#             print("positive_sample_loss : ",positive_sample_loss)
+#             print("negative_sample_loss : ",negative_sample_loss)
+#             print("="*120)
+            if epoch < 10:
+                pn_loss = (positive_sample_loss + negative_sample_loss)*0.5
+            elif epoch < 80:
+                pn_loss = (positive_sample_loss + negative_sample_loss)*0.05
+            else:
+                pn_loss = (positive_sample_loss + negative_sample_loss)*0.005
+>>>>>>> 74cdadf9599883af244cb8ee7d3a36145d6ba4da
 #             print("pn_loss: ", pn_loss)
 #             print("loss: ", loss)
             

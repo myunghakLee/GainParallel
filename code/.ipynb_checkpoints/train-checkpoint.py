@@ -261,8 +261,12 @@ def train(opt):
 #             print("positive_sample_loss : ",positive_sample_loss)
 #             print("negative_sample_loss : ",negative_sample_loss)
 #             print("="*120)
-            
-            pn_loss = (positive_sample_loss + negative_sample_loss)*0.5
+            if epoch < 10:
+                pn_loss = (positive_sample_loss + negative_sample_loss)*0.5
+            elif epoch < 80:
+                pn_loss = (positive_sample_loss + negative_sample_loss)*0.05
+            else:
+                pn_loss = (positive_sample_loss + negative_sample_loss)*0.005
 #             print("pn_loss: ", pn_loss)
 #             print("loss: ", loss)
             
