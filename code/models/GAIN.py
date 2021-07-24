@@ -453,7 +453,7 @@ class GAIN_BERT(nn.Module):
             (h_entity, t_entity, torch.abs(h_entity - t_entity), torch.mul(h_entity, t_entity), global_info, path_info),
             dim=-1))
         # predictions = self.predict(torch.cat((h_entity, t_entity, torch.abs(h_entity-t_entity), torch.mul(h_entity, t_entity), global_info), dim=-1))
-        return predictions, encoder_outputs, output_feature, entity_graph_feature, h_entity, t_entity
+        return predictions, encoder_outputs, output_feature, entity_graph_feature, h_entity, t_entity, entity_bank, path_info
 
 
 class Attention(nn.Module):

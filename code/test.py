@@ -31,7 +31,7 @@ def test(model, dataloader, modelname, id2rel, input_theta=-1, output=False, is_
             overlaps = d['overlaps']
 
             predictions, encoder_outputs, output_feature, \
-            entity_graph_feature, h_entity, t_entity = model(words=d['context_idxs'],
+            entity_graph_feature, h_entity, t_entity, entity_bank, path_info = model(words=d['context_idxs'],
                                 src_lengths=d['context_word_length'],
                                 mask=d['context_word_mask'],
                                 entity_type=d['context_ner'],

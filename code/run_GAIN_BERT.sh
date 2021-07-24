@@ -13,7 +13,7 @@ if true; then
   epoch=300
   test_epoch=5
   log_step=20
-  save_model_freq=3
+  save_model_freq=10
   negativa_alpha=4
 
   nohup python3 -u train.py \
@@ -34,7 +34,7 @@ if true; then
     --save_model_freq ${save_model_freq} \
     --negativa_alpha ${negativa_alpha} \
     --gcn_dim 808 \
-    --gcn_layers 2 \
+    --gcn_layers 3 \
     --bert_hid_size 768 \
     --bert_path ../PLM/bert-base-uncased \
     --use_entity_type \

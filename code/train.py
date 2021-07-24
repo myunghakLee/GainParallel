@@ -173,7 +173,7 @@ def train(opt):
             '''
 
             predictions, encoder_outputs, output_feature, \
-            entity_graph_feature, h_entity, t_entity = model(words=d['context_idxs'],
+            entity_graph_feature, h_entity, t_entity, entity_bank,path_info = model(words=d['context_idxs'],
                                                     src_lengths=d['context_word_length'],
                                                     mask=d['context_word_mask'],
                                                     entity_type=d['context_ner'],
@@ -192,76 +192,131 @@ def train(opt):
             loss = torch.sum(BCE(predictions, relation_multi_label) * relation_mask.unsqueeze(2)) / (
                     opt.relation_nums * torch.sum(relation_mask))
             
-            start_idx = 0
-            positive_sample_loss = 0.0
-            negative_sample_loss = 0.0
-#             print(d['entity_graphs'])
-            for i, batch in enumerate(relation_multi_label):
-#                 print("relation_multi_label dddddddddddddddddddd: ",len(relation_multi_label))
-                h_t_pairs = d['h_t_pairs'][i]
-                
-                ent_size = len(d['entity_graphs'][i].nodes())
+
             
-                rel = torch.nonzero(batch[:ent_size] == 1)
-#                 print("batch : ", batch.shape)
-#                 print("h_t_pairs : ", d['h_t_pairs'][i])
-                
-#                 print(rel)
-#                 print(rel.shape)
-                p_idx = rel[:,0][torch.where(rel[:,1]>0)]
-                if len(p_idx) == 0:
-                    continue
-#                 n_idx = rel[:,0][torch.where(rel[:,1]==0)]
-                head_p = entity_graph_feature[h_t_pairs[p_idx][:,0] + start_idx-1]
-                tail_p = entity_graph_feature[h_t_pairs[p_idx][:,1] + start_idx-1]
-                head_p = head_p.reshape(len(head_p), 1, -1)
-                tail_p = tail_p.reshape(len(tail_p), 1, -1)
-                
-                
-                ent_n = torch.cat((entity_graph_feature[:start_idx], entity_graph_feature[start_idx+ent_size:]))
-                ent_n = ent_n.repeat((len(head_p),1,1))
-
-                
-                if len(head_p > 0):
-                    rel_p = rel[:,1][p_idx]
-                    rel_p = relation_embedding[rel_p]
-                    rel_p = rel_p.reshape(len(rel_p), 1, -1)
-#                     print("HeadP : ", head_p.shape)
-#                     print("tail_p : ", tail_p.shape)
-#                     print("rel_p : ", rel_p.shape)
-#                     print("ent_n : ", ent_n.shape)
-#                     print("="*100)
-                    output = LPmodel.func(head_p,rel_p,tail_p)
-                    subsampling_weight = torch.tensor([1/len(head_p) for i in range(len(head_p))]).cuda()
-                    positive_sample_loss = p_score(output, subsampling_weight)
-
-#                 if len(head_n > 0):
-#                     rel_n = (torch.randint(opt.relation_nums-1, (len(head_n),))+1).cuda()
-#                     rel_n = relation_embedding[rel_n]
+            if opt.LPmode == "use_path_info":
+                for jj, (h, r, t) in enumerate(zip(h_entity, path_info, t_entity)):
                     
-                    if torch.randint(2,(1,)) == 1:
-                        output = LPmodel.func(head_p.reshape(len(head_p), 1, -1),
-                                              rel_p.reshape(len(head_p), 1, -1),
-                                              ent_n)
-                    else:
-                        output = LPmodel.func(ent_n,
-                                              rel_p.reshape(len(head_p), 1, -1),
-                                              tail_p.reshape(len(head_p), 1, -1))
-                        
-#                     subsampling_weight = torch.tensor([1/len(head_n) for i in range(len(head_n))]).cuda()
-                    negative_sample_loss = n_score(output, subsampling_weight)
-#                     negative_sample_loss += -(subsampling_weight * negative_score).sum() / subsampling_weight.sum()
-                start_idx += ent_size                   
-                                   
-                                   
-                                
-                
-            positive_sample_loss = positive_sample_loss / len(relation_multi_label)
-            negative_sample_loss = negative_sample_loss / len(relation_multi_label)
-#             print("positive_sample_loss : ",positive_sample_loss)
-#             print("negative_sample_loss : ",negative_sample_loss)
-#             print("="*120)
-            
+                    length = int(torch.sum(relation_mask[jj]))
+#                     ht_set = set([ss for ss in d['h_t_pairs'][jj]])
+                    
+#                     ht_n = []
+#                     for k in range(length):
+#                         T = []
+#                         for l in range(length):
+#                             if k != l and (k,l) not in ht_set:
+#                                 T.append(l)
+#                         ht_n.append(T)
+#                     print(length)
+                    
+#                     print(d['context_pos'][jj][:length])
+#                     print(d['context_pos'][jj])
+# #                     print(torch.max(d['h_t_pairs'][jj][:length]))
+#                     exit(True)
+
+#                     print(d['relation_mask'][jj])
+#                     print(length)
+#                     print(h[:length+2])
+#                     print(h)
+#                     exit(True)
+                    h = h[:length]
+                    t = t[:length]
+                    r = r[:length]
+     
+                    t_n = torch.cat([torch.cat((t[:i], t[i+1:])).unsqueeze(0) for i in range(len(t))])
+                    h = h.reshape(length, 1, -1)
+                    r = r.reshape(length, 1, -1)
+                    t = t.reshape(length, 1, -1)
+                         
+                    
+# #                     h_n = torch.cat((entity_graph_feature[:start_idx], entity_graph_feature[start_idx+ent_size:]))
+#                     print(h.shape)
+#                     print(r.shape)
+#                     print(t.shape)
+#                     print(t_n.shape)
+#                     exit(True)
+        
+                    
+                    output = LPmodel.func(h,r,t)
+                    subsampling_weight = torch.tensor([1/len(h) for i in range(len(h))]).cuda()
+                    positive_sample_loss = p_score(output, subsampling_weight)/len(h)
+                positive_sample_loss /= len(h_entity)
+                negative_sample_loss = 0
+            else:
+                start_idx = 0
+                positive_sample_loss = 0.0
+                negative_sample_loss = 0.0
+    #             print(d['entity_graphs'])
+                for i, batch in enumerate(relation_multi_label):
+    #                 print("relation_multi_label dddddddddddddddddddd: ",len(relation_multi_label))
+                    h_t_pairs = d['h_t_pairs'][i]
+
+                    ent_size = len(d['entity_graphs'][i].nodes())
+
+                    rel = torch.nonzero(batch[:ent_size] == 1)
+    #                 print("batch : ", batch.shape)
+    #                 print("h_t_pairs : ", d['h_t_pairs'][i])
+
+    #                 print(rel)
+    #                 print(rel.shape)
+                    p_idx = rel[:,0][torch.where(rel[:,1]>0)]
+                    if len(p_idx) == 0:
+                        continue
+    #                 n_idx = rel[:,0][torch.where(rel[:,1]==0)]
+                    head_p = entity_graph_feature[h_t_pairs[p_idx][:,0] + start_idx-1]
+                    tail_p = entity_graph_feature[h_t_pairs[p_idx][:,1] + start_idx-1]
+                    head_p = head_p.reshape(len(head_p), 1, -1)
+                    tail_p = tail_p.reshape(len(tail_p), 1, -1)
+
+
+                    ent_n = torch.cat((entity_graph_feature[:start_idx], entity_graph_feature[start_idx+ent_size:]))
+                    ent_n = ent_n.repeat((len(head_p),1,1))
+
+
+
+
+                    if len(head_p > 0):
+                        rel_p = rel[:,1][p_idx]
+                        rel_p = relation_embedding[rel_p]
+                        rel_p = rel_p.reshape(len(rel_p), 1, -1)
+                        print("HeadP : ", head_p.shape)
+                        print("tail_p : ", tail_p.shape)
+                        print("rel_p : ", rel_p.shape)
+                        print("ent_n : ", ent_n.shape)
+                        exit(True)
+    #                     print("ent_n : ", ent_n.shape)
+    #                     print("="*100)
+                        output = LPmodel.func(head_p,rel_p,tail_p)
+                        subsampling_weight = torch.tensor([1/len(head_p) for i in range(len(head_p))]).cuda()
+                        positive_sample_loss = p_score(output, subsampling_weight)
+
+    #                 if len(head_n > 0):
+    #                     rel_n = (torch.randint(opt.relation_nums-1, (len(head_n),))+1).cuda()
+    #                     rel_n = relation_embedding[rel_n]
+
+                        if torch.randint(2,(1,)) == 1:
+                            output = LPmodel.func(head_p.reshape(len(head_p), 1, -1),
+                                                  rel_p.reshape(len(head_p), 1, -1),
+                                                  ent_n)
+                        else:
+                            output = LPmodel.func(ent_n,
+                                                  rel_p.reshape(len(head_p), 1, -1),
+                                                  tail_p.reshape(len(head_p), 1, -1))
+
+    #                     subsampling_weight = torch.tensor([1/len(head_n) for i in range(len(head_n))]).cuda()
+                        negative_sample_loss = n_score(output, subsampling_weight)
+    #                     negative_sample_loss += -(subsampling_weight * negative_score).sum() / subsampling_weight.sum()
+                    start_idx += ent_size                   
+
+
+
+
+                positive_sample_loss = positive_sample_loss / len(relation_multi_label)
+                negative_sample_loss = negative_sample_loss / len(relation_multi_label)
+    #             print("positive_sample_loss : ",positive_sample_loss)
+    #             print("negative_sample_loss : ",negative_sample_loss)
+    #             print("="*120)
+
             pn_loss = (positive_sample_loss + negative_sample_loss)*0.5
 #             print("pn_loss: ", pn_loss)
 #             print("loss: ", loss)
