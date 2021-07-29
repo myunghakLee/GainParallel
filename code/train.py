@@ -7,12 +7,16 @@ import torch.nn.functional as F
 # +
 def p_score(vector, subsampling_weight, mode="HAKE"):
     positive_score = F.logsigmoid(vector).squeeze(dim=1)
+    
+#     print("positive_score : ", positive_score)
+    
     positive_sample_loss = - (subsampling_weight * positive_score).sum() / subsampling_weight.sum()
     return positive_sample_loss
 
 def n_score(vector, subsampling_weight, mode="HAKE", adversarial_temperature=1.0):
     negative_score = (F.softmax(vector * adversarial_temperature, dim=1).detach()
                           * F.logsigmoid(-vector)).sum(dim=1)
+#     print("negative_score : ", negative_score)
     negative_sample_loss = - (subsampling_weight * negative_score).sum() / subsampling_weight.sum()
     return negative_sample_loss
 
@@ -221,7 +225,7 @@ def train(opt):
             if opt.LPmode == "use_bank":
                 for batch, (h, r, t) in enumerate(zip(h_entity, path_info, t_entity)):
                     max_entity_idx = torch.max(d['h_t_pairs'][batch])
-                    max_entity_idx = len(entity_bank[batch])
+#                     max_entity_idx = len(entity_bank[batch])
                     
                     
                     negative_tail = np.zeros((opt.batch_size, len(d['h_t_pairs']), ))
@@ -240,10 +244,16 @@ def train(opt):
                     r = r.reshape(length, 1, -1)
                     t = t.reshape(length, 1, -1)
                     
-                    
+#                     print(h.shape)
+#                     print(r.shape)
+#                     print(t.shape)
                     output = LPmodel.func(h,r,t)
-                    subsampling_weight = torch.tensor([1/len(h) for i in range(len(h))]).cuda()
-                    positive_sample_loss = p_score(output, subsampling_weight)/len(h)
+                    subsampling_weight = torch.tensor([1/len(output) for i in range(len(output))]).cuda()
+                    positive_sample_loss = p_score(output, subsampling_weight)
+#                     exit(True)
+
+                    if len(output) != 0:
+                        positive_sample_loss = positive_sample_loss/len(output)
                     #positive_sample_loss /= max(len(h), 1)
                     
                     ht_pair_set = set()
@@ -259,42 +269,73 @@ def train(opt):
                                 NE_ht[jj-1].append(kk-1)
                                 NE_th[kk-1].append(jj-1)
                     
-                    subsampling_weight = torch.tensor([1 for i in range(1)]).cuda()
 #                     exit(True)
-                    output1 = LPmodel.func(entity_bank[batch][0].unsqueeze(0).unsqueeze(0),
-                                           relation_embedding[torch.randint(95,(1,))+1].unsqueeze(0), 
-                                           entity_bank[batch].unsqueeze(0))
-#                     print(output1.shape)
-                    negative_sample_loss = n_score(output1, subsampling_weight)
+
+
+
+
+
+
+
+
+
+
+
+
+
+                    # negative sample
+#                     subsampling_weight = torch.tensor([1 for i in range(1)]).cuda()
                     
+                    NE_bank = entity_bank[batch][:max_entity_idx].repeat((len(h),1,1))
+#                     print(NE_bank.shape)
+#                     print(h.shape)
 #                     print(r.shape)
-#                     print(relation_embedding.shape)
 #                     exit(True)
+                    output1 = LPmodel.func(h,r, NE_bank)
+                    subsampling_weight = torch.tensor([1/len(output1) for i in range(len(output1))]).cuda()
+                    negative_sample_loss = n_score(output1, subsampling_weight)
 
+                
+#                     print(NE_bank.shape)
+#                     print(r.shape)
+#                     print(t.shape)
 
-#                     print(entity_bank[batch][0].unsqueeze(0).unsqueeze(0).shape)
-#                     print(relation_embedding[torch.randint(95,(1,))+1].unsqueeze(0).shape)
-#                     print(entity_bank[batch].unsqueeze(0).shape)
-#                     print(relation_label[batch].shape)
-    
+                
+#                     output1 = LPmodel.func(NE_bank,r, t)
+#                     print(output1)
+#                     print(output1.shape)
 #                     exit(True)
-                    for jj in range(1, len(entity_bank[batch])):
-                        output1 = LPmodel.func(entity_bank[batch][jj].unsqueeze(0).unsqueeze(0),
-                                               relation_embedding[torch.randint(95,(1,))+1].unsqueeze(0), 
-                                               entity_bank[batch].unsqueeze(0))
-                        negative_sample_loss += n_score(output1, subsampling_weight)
+                    output1 = LPmodel.func(NE_bank,r, t)
+                    negative_sample_loss += n_score(output1, subsampling_weight)
+                    negative_sample_loss /= 2
+            
+#                     output1 = LPmodel.func(entity_bank[batch][0].unsqueeze(0).unsqueeze(0),
+#                                            relation_embedding[torch.randint(95,(1,))+1].unsqueeze(0), 
+#                                            entity_bank[batch].unsqueeze(0))
+
+                    
+#             #                     print(output1.shape)
+#                     negative_sample_loss = n_score(output1, subsampling_weight)
+
+#     #                     exit(True)
+#                     for jj in range(1, len(entity_bank[batch])):
+#                         output1 = LPmodel.func(entity_bank[batch][jj].unsqueeze(0).unsqueeze(0),
+#                                                relation_embedding[torch.randint(95,(1,))+1].unsqueeze(0), 
+#                                                entity_bank[batch].unsqueeze(0))
+#                         negative_sample_loss += n_score(output1, subsampling_weight)
+#                         print("negative_sample_loss : ", negative_sample_loss)
                         
-                    for jj in range(0, len(entity_bank[batch])):
-                        output1 = LPmodel.func(entity_bank[batch].unsqueeze(0),
-                                               relation_embedding[torch.randint(95,(1,))+1].unsqueeze(0), 
-                                               entity_bank[batch][jj].unsqueeze(0))
-                        negative_sample_loss += n_score(output1, subsampling_weight)
-                        
-                    negative_sample_loss /= len(entity_bank[batch]*2)
-                    negative_sample_loss *= 0.1
-                    print("-"*100)
-                    print(negative_sample_loss)
-                    print(positive_sample_loss)
+#                     for jj in range(0, len(entity_bank[batch])):
+#                         output1 = LPmodel.func(entity_bank[batch].unsqueeze(0),
+#                                                relation_embedding[torch.randint(95,(1,))+1].unsqueeze(0), 
+#                                                entity_bank[batch][jj].unsqueeze(0))
+#                         negative_sample_loss += n_score(output1, subsampling_weight)
+#                         print("negative_sample_loss : ", negative_sample_loss)
+#                     negative_sample_loss /= len(entity_bank[batch]*2)
+#                     negative_sample_loss *= 0.1
+#                     print("-"*100)
+#                     print(negative_sample_loss)
+#                     print(positive_sample_loss)
                                                 
 #                     output2 = LPmodel.func(ent_n,
 #                                           rel_p.reshape(len(head_p), 1, -1),
