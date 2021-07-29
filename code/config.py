@@ -101,7 +101,7 @@ def get_opt():
     parser.add_argument('--input_theta', type=float, default=-1)
 
     parser.add_argument('--RE_lr_scale', type=float, default=1.0)
-    parser.add_argument('--LPmode', choices=['HAKE', 'TransE', 'TransR', 'RotatE', 'ModE', "use_path_info"], default = 'HAKE')
+    parser.add_argument('--LPmode', choices=['HAKE', 'TransE', 'TransR', 'RotatE', 'ModE', "use_path_info", "use_bank"], default = 'HAKE')
 
     
     return parser.parse_args()

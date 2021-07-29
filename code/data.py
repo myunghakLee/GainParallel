@@ -97,7 +97,8 @@ class DGLREDataset(IterableDataset):
                     for k in range(len(entity_list)):
                         if j != k and (j, k) not in train_triple:
                             na_triple.append((j, k))
-
+#                 print("na_triple: ", na_triple)
+#                 exit(True)
                 # generate document ids
                 words = []
                 for sentence in sentences:
@@ -344,7 +345,8 @@ class BERTDGLREDataset(IterableDataset):
                     for k in range(len(entity_list)):
                         if j != k and (j, k) not in train_triple:
                             na_triple.append((j, k))
-
+#                 print("na_triple: ", na_triple)
+#                 exit(True)
                 # generate document ids
                 words = []
                 for sentence in sentences:
@@ -599,12 +601,13 @@ class DGLREDataloader(DataLoader):
             entity2mention_table = []
             path_table = []
             overlaps = []
-
+            na_triple_batch = []
             for i, example in enumerate(minibatch):
                 title, entities, labels, na_triple, word_id, pos_id, ner_id, mention_id, entity2mention, graph, entity_graph, path = \
                     example['title'], example['entities'], example['labels'], example['na_triple'], \
                     example['word_id'], example['pos_id'], example['ner_id'], example['mention_id'], example[
                         'entity2mention'], example['graph'], example['entity_graph'], example['path']
+                na_triple_batch.append(na_triple)
                 graph_list.append(graph)
                 entity_graph_list.append(entity_graph)
                 path_table.append(path)
@@ -700,7 +703,12 @@ class DGLREDataloader(DataLoader):
             context_word_mask = context_word_ids > 0
             context_word_length = context_word_mask.sum(1)
             batch_max_length = context_word_length.max()
-
+            
+#             for d_ in na_triple_batch[0]:
+#                 if torch.tensor([d_[0]+1, d_[1]+1]).cuda() in ht_pairs[0]:
+#                     print(d_)
+                    
+                    
             yield {'context_idxs': get_cuda(context_word_ids[:cur_bsz, :batch_max_length].contiguous()),
                    'context_pos': get_cuda(context_pos_ids[:cur_bsz, :batch_max_length].contiguous()),
                    'context_ner': get_cuda(context_ner_ids[:cur_bsz, :batch_max_length].contiguous()),
@@ -720,5 +728,6 @@ class DGLREDataloader(DataLoader):
                    'entity2mention_table': entity2mention_table,
                    'entity_graphs': entity_graph_list,
                    'path_table': path_table,
-                   'overlaps': overlaps
+                   'overlaps': overlaps,
+                   'NA_triples': na_triple_batch
                    }

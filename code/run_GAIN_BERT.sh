@@ -34,7 +34,7 @@ if true; then
     --save_model_freq ${save_model_freq} \
     --negativa_alpha ${negativa_alpha} \
     --gcn_dim 808 \
-    --gcn_layers 3 \
+    --gcn_layers 2 \
     --bert_hid_size 768 \
     --bert_path ../PLM/bert-base-uncased \
     --use_entity_type \
